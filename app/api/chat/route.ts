@@ -8,7 +8,9 @@ if (!process.env.DEEPSEEK_API_KEY) {
 
 const client = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: 'https://api.deepseek.com'
+  baseURL: 'https://api.deepseek.com',
+  timeout: 50000, // 设置50秒超时
+  maxRetries: 3, // 最多重试3次
 });
 
 export async function POST(req: Request) {
@@ -23,24 +25,41 @@ export async function POST(req: Request) {
       );
     }
 
-    const response = await client.chat.completions.create({
-      model: 'deepseek-chat',
-      messages,
-      temperature: 0.7,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45秒后终止
 
-    if (!response.choices[0]?.message?.content) {
-      throw new Error('API 返回了无效的响应格式');
+    try {
+      const response = await client.chat.completions.create({
+        model: 'deepseek-chat',
+        messages,
+        temperature: 0.7,
+        stream: false,
+      }, { signal: controller.signal });
+
+      clearTimeout(timeoutId);
+
+      if (!response.choices[0]?.message?.content) {
+        throw new Error('API 返回了无效的响应格式');
+      }
+
+      return NextResponse.json({ 
+        content: response.choices[0].message.content 
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
-
-    return NextResponse.json({ 
-      content: response.choices[0].message.content 
-    });
   } catch (error) {
     console.error('Chat API Error:', error);
     
     // 区分不同类型的错误
     if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        return NextResponse.json(
+          { error: '请求超时，请稍后重试' },
+          { status: 504 }
+        );
+      }
       if (error.message.includes('API key')) {
         return NextResponse.json(
           { error: 'API 认证失败' },

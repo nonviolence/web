@@ -368,6 +368,7 @@ const CharacterAvatar: React.FC<{ posterId: number; className?: string }> = ({ p
           src={`/images/poster_${posterId}.png`}
           alt="Character Avatar"
           fill
+          sizes="(max-width: 768px) 40px, 48px"
           className="object-cover"
           style={{
             objectPosition: `center ${posterData[posterId]?.avatarPosition?.top || 20}%`,
@@ -611,6 +612,7 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   const [conversationHistory, setConversationHistory] = useState<{ role: string; content: string; }[]>([]);
   const [characterHistories, setCharacterHistories] = useState<Record<number, Message[]>>({});
   const [isMobile, setIsMobile] = useState(false);
+  const touchMoveHandler = useRef<((e: TouchEvent) => void) | null>(null);
 
   // 简化滚动到底部函数
   const scrollToBottom = useCallback(() => {
@@ -657,6 +659,15 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
     checkMobile(); // 初始检查
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    // 组件卸载时清理事件监听器
+    return () => {
+      if (containerRef.current && touchMoveHandler.current) {
+        containerRef.current.removeEventListener('touchmove', touchMoveHandler.current);
+      }
+    };
   }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -919,237 +930,288 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setIsDragging(true);
-    setStartX(e.touches[0].pageX - (containerRef.current?.offsetLeft || 0));
+    setStartX(e.touches[0].pageX);
     setScrollLeft(containerRef.current?.scrollLeft || 0);
-  };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    const x = e.touches[0].pageX - (containerRef.current?.offsetLeft || 0);
-    const walk = (x - startX) * 2;
+    // 创建并存储 touchmove 处理函数
+    const touchMoveListener = (e: TouchEvent) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const x = (e as TouchEvent).touches[0].pageX;
+      const walk = (startX - x) * 2;
+      if (containerRef.current) {
+        containerRef.current.scrollLeft = scrollLeft + walk;
+      }
+    };
+
+    // 保存引用以便后续移除
+    touchMoveHandler.current = touchMoveListener;
+
+    // 添加事件监听器，设置 passive: false
     if (containerRef.current) {
-      containerRef.current.scrollLeft = scrollLeft - walk;
+      containerRef.current.addEventListener('touchmove', touchMoveListener, { passive: false });
     }
   };
 
   const handleTouchEnd = () => {
     setIsDragging(false);
+    // 移除事件监听器
+    if (containerRef.current && touchMoveHandler.current) {
+      containerRef.current.removeEventListener('touchmove', touchMoveHandler.current);
+      touchMoveHandler.current = null;
+    }
   };
 
   return (
     <div className="relative w-full h-screen">
-      {/* 聊天界面 */}
-      <div className={`
-        fixed top-0 right-0 h-screen bg-black/40 backdrop-blur-md
-        ${isMobile ? 'w-[280px]' : 'w-[400px]'}
-        border-l border-white/10 z-20
-      `}>
-        <div className="h-full flex flex-col">
-          {selectedId ? (
-            <>
-              {/* 头部信息 */}
-              <div className="flex-none p-4 border-b border-white/10">
-                <CharacterAvatar posterId={selectedId} className="w-12 h-12" />
-                <div className="ml-4">
-                  <h3 className="text-lg font-bold text-primary">
-                    {posterData[selectedId].name}
-                  </h3>
-                  <p className="text-sm text-gray-400">
-                    {posterData[selectedId].title}
-                  </p>
-                </div>
-              </div>
-
-              {/* 聊天历史记录 */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <ChatHistory
-                  messages={messages}
-                  selectedId={selectedId}
-                  isTyping={isTyping}
-                  isTypingComplete={isTypingComplete}
-                  onScrollToBottom={scrollToBottom}
-                />
-              </div>
-
-              {/* 输入框区域 */}
-              <div className="flex-none p-4 border-t border-white/10">
-                <form 
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }}
-                  className="flex space-x-2"
-                >
-                  <input
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder={`与 ${posterData[selectedId].name} 对话...`}
-                    className="flex-1 bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-400"
-                    disabled={isTyping}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!inputMessage.trim() || isTyping}
-                    className="px-4 py-2 bg-primary/20 text-primary rounded-lg disabled:opacity-50"
-                  >
-                    发送
-                  </button>
-                </form>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-                <span className="text-2xl text-primary">👋</span>
-              </div>
-              <h3 className="text-xl font-bold text-primary mb-2">欢迎来到罗德岛</h3>
-              <p className="text-sm text-gray-400">
-                请从左侧选择一位干员开始对话
-              </p>
+      {/* 背景图层 */}
+      <div className="fixed inset-0 z-0 overflow-hidden">
+        {/* 后景层 */}
+        <div className="absolute inset-0">
+          <div className="relative w-full h-full">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Image
+                src="/images/chat_bg.png"
+                alt="Background"
+                className="object-contain opacity-5"
+                sizes="100vw"
+                width={1920}
+                height={1080}
+                priority
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  margin: 'auto'
+                }}
+              />
             </div>
-          )}
+          </div>
         </div>
-      </div>
-
-      {/* 海报展示区域 */}
-      <div className={`
-        ${isMobile ? 'fixed left-0 right-0 top-24 px-4' : 'fixed left-8 top-32 w-[30vw]'}
-        select-none z-40
-      `}>
-        <div className="relative">
-          <AnimatePresence mode="wait">
-            {selectedPoster && (
-              <motion.div
-                ref={detailsRef}
-                initial={{ opacity: 0, x: -100, y: isMobile ? 50 : 300, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, y: isMobile ? 50 : 300, scale: 1 }}
-                exit={{ opacity: 0, x: -50, y: isMobile ? 50 : 300, scale: 0.95 }}
-                className={`
-                  absolute left-0 bg-black/40 backdrop-blur-xl rounded-lg border-2 border-primary/30 z-10
-                  ${isMobile ? 'w-full' : 'w-[480px]'}
-                `}
-              >
-                {/* 角色详情内容 */}
-                <div className="p-6 space-y-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-primary mb-2">{selectedPoster.name}</h2>
-                    <p className="text-primary/70">{selectedPoster.title}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <p className="text-sm text-primary/70">{selectedPoster.description}</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <span className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
-                        {selectedPoster.profession}
-                      </span>
-                      <span className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
-                        {selectedPoster.position}
-                      </span>
-                      <span className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
-                        {selectedPoster.faction}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-primary">技能</h3>
-                    <p className="text-sm text-primary/70">{selectedPoster.skill}</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-primary">性格特征</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedPoster.traits.map((trait, index) => (
-                        <span key={index} className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
-                          {trait}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-primary">背景故事</h3>
-                    <p className="text-sm text-primary/70">{selectedPoster.story}</p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* 海报列表 */}
-          <div 
-            ref={containerRef}
-            className="overflow-hidden cursor-grab active:cursor-grabbing"
-            onWheel={(e) => {
-              // 检查滚轮事件是否来自海报列表区域
-              const rect = containerRef.current?.getBoundingClientRect();
-              if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                e.preventDefault();
-                if (containerRef.current) {
-                  containerRef.current.scrollLeft += e.deltaY;
-                }
-              }
-            }}
-            onMouseDown={(e) => {
-              // 检查点击事件是否来自海报列表区域
-              const rect = containerRef.current?.getBoundingClientRect();
-              if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                handleMouseDown(e);
-              }
-            }}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onTouchStart={(e) => {
-              // 检查触摸事件是否来自海报列表区域
-              const rect = containerRef.current?.getBoundingClientRect();
-              if (rect && e.touches[0].clientY >= rect.top && e.touches[0].clientY <= rect.bottom) {
-                handleTouchStart(e);
-              }
-            }}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
-            <div className="flex space-x-4 py-2">
-              {posters.map((src, index) => (
-                loadedImages.has(src) && (
-                  <motion.div
-                    key={src}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className={`
-                      relative rounded-lg overflow-hidden cursor-pointer group flex-none
-                      ${isMobile ? 'w-[100px] h-[200px]' : 'w-[140px] h-[280px]'}
-                    `}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isDragging) {
-                        handlePosterClick(index);
-                      }
-                    }}
-                    onMouseEnter={() => handlePosterHover(index)}
-                    onMouseLeave={handlePosterHoverEnd}
-                  >
-                    <Image
-                      src={src}
-                      alt={`Poster ${index + 1}`}
-                      fill
-                      className={`object-contain transition-all duration-300 ${
-                        selectedPoster?.id === index + 1 ? 'scale-105' : 'group-hover:scale-105'
-                      }`}
-                      priority={index < 4}
-                      draggable={false}
-                    />
-                  </motion.div>
-                )
-              ))}
+        {/* 前景层 */}
+        <div className="absolute inset-0">
+          <div className="relative w-full h-full">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Image
+                src="/images/chat_bg.png"
+                alt="Foreground"
+                className="object-contain opacity-10"
+                sizes="100vw"
+                width={1920}
+                height={1080}
+                priority
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  margin: 'auto'
+                }}
+              />
             </div>
           </div>
         </div>
       </div>
+
+      {/* 移动端四行布局 */}
+      {isMobile ? (
+        <div className="fixed inset-0 z-10 flex flex-col h-screen">
+          {/* 第一行：Logo (1/10的高度) */}
+          <div className="h-[10vh] bg-black/40 backdrop-blur-sm flex items-center justify-center relative">
+            <div className="absolute inset-0 bg-black/40" />
+            <h1 className="text-2xl font-bold text-primary relative z-10">罗德岛终端</h1>
+          </div>
+
+          {/* 第二行：海报列表 (2/10的高度) */}
+          <div className="h-[20vh] bg-black/40 backdrop-blur-sm">
+            <div className="h-full px-2 py-1">
+              <div 
+                ref={containerRef}
+                className="h-full overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing whitespace-nowrap"
+                onWheel={(e) => {
+                  e.preventDefault();
+                  if (containerRef.current) {
+                    containerRef.current.scrollLeft += e.deltaY;
+                  }
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              >
+                <div className="flex space-x-2 h-full items-center min-w-max">
+                  {posters.map((src, index) => (
+                    loadedImages.has(src) && (
+                      <motion.div
+                        key={src}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="relative rounded-lg overflow-hidden cursor-pointer group flex-none w-[70px] h-[130px]"
+                        onClick={() => !isDragging && handlePosterClick(index)}
+                        onMouseEnter={() => handlePosterHover(index)}
+                        onMouseLeave={handlePosterHoverEnd}
+                      >
+                        <Image
+                          src={src}
+                          alt={`Poster ${index + 1}`}
+                          fill
+                          sizes="(max-width: 768px) 70px, 80px"
+                          className={`object-contain transition-all duration-300 ${
+                            selectedPoster?.id === index + 1 ? 'scale-105' : 'group-hover:scale-105'
+                          }`}
+                          priority={index < 4}
+                          draggable={false}
+                        />
+                      </motion.div>
+                    )
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 第三行：详情弹窗 (1.5/10的高度) */}
+          <div className="h-[15vh] bg-black/30 backdrop-blur-sm overflow-hidden">
+            <AnimatePresence mode="wait">
+              {selectedPoster && (
+                <motion.div
+                  ref={detailsRef}
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="h-full w-full overflow-y-auto custom-scrollbar"
+                >
+                  <div className="p-3 space-y-2">
+                    <div>
+                      <h2 className="text-lg font-bold text-primary mb-1">{selectedPoster.name}</h2>
+                      <p className="text-xs text-primary/70">{selectedPoster.title}</p>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <p className="text-xs text-primary/70">{selectedPoster.description}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        <span className="px-1.5 py-0.5 bg-primary/10 rounded-full text-[10px] text-primary">
+                          {selectedPoster.profession}
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-primary/10 rounded-full text-[10px] text-primary">
+                          {selectedPoster.position}
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-primary/10 rounded-full text-[10px] text-primary">
+                          {selectedPoster.faction}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-primary">技能</h3>
+                      <p className="text-xs text-primary/70">{selectedPoster.skill}</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-primary">性格特征</h3>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedPoster.traits.map((trait, index) => (
+                          <span key={index} className="px-1.5 py-0.5 bg-primary/10 rounded-full text-[10px] text-primary">
+                            {trait}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-primary">背景故事</h3>
+                      <p className="text-xs text-primary/70">{selectedPoster.story}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 第四行：聊天窗口 (5.5/10的高度) */}
+          <div className="h-[55vh] bg-black/40 backdrop-blur-md border-t border-white/10">
+            <div className="h-full flex flex-col">
+              {selectedId ? (
+                <>
+                  {/* 头部信息 */}
+                  <div className="flex-none p-3 border-b border-white/10 flex items-center">
+                    <CharacterAvatar posterId={selectedId} className="w-10 h-10" />
+                    <div className="ml-3">
+                      <h3 className="text-base font-bold text-primary">
+                        {posterData[selectedId].name}
+                      </h3>
+                      <p className="text-xs text-gray-400">
+                        {posterData[selectedId].title}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 聊天历史记录 */}
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <ChatHistory
+                      messages={messages}
+                      selectedId={selectedId}
+                      isTyping={isTyping}
+                      isTypingComplete={isTypingComplete}
+                      onScrollToBottom={scrollToBottom}
+                    />
+                  </div>
+
+                  {/* 输入框区域 */}
+                  <div className="flex-none p-3 border-t border-white/10">
+                    <form 
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }}
+                      className="flex space-x-2"
+                    >
+                      <input
+                        type="text"
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        placeholder={`与 ${posterData[selectedId].name} 对话...`}
+                        className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400"
+                        disabled={isTyping}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!inputMessage.trim() || isTyping}
+                        className="px-3 py-2 bg-primary/20 text-primary rounded-lg disabled:opacity-50 text-sm"
+                      >
+                        发送
+                      </button>
+                    </form>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                  <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center mb-3">
+                    <span className="text-xl text-primary">👋</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-primary mb-2">欢迎来到罗德岛</h3>
+                  <p className="text-xs text-gray-400">
+                    请从上方选择一位干员开始对话
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        // 桌面端布局保持不变
+        <>
+          {/* 聊天界面 */}
+          <div className="fixed top-0 right-0 h-screen w-[400px] bg-black/40 backdrop-blur-md border-l border-white/10 z-20">
+            {/* ... existing desktop chat interface code ... */}
+          </div>
+
+          {/* 海报展示区域 */}
+          <div className="fixed left-8 top-32 w-[30vw] z-40">
+            {/* ... existing desktop poster gallery code ... */}
+          </div>
+        </>
+      )}
     </div>
   );
 }

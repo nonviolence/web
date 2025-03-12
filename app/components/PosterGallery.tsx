@@ -607,15 +607,6 @@ export default function PosterGallery() {
   const [conversationHistory, setConversationHistory] = useState<{ role: string; content: string; }[]>([]);
   const [characterHistories, setCharacterHistories] = useState<Record<number, Message[]>>({});
 
-  // 移除不需要的状态和引用
-  const [isHovering, setIsHovering] = useState(false);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isScrolling, setIsScrolling] = useState(false);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
-  const lastScrollPosition = useRef(0);
-
   // 简化滚动到底部函数
   const scrollToBottom = useCallback(() => {
     setIsTypingComplete(true);
@@ -813,37 +804,6 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
 
 请以此角色身份进行对话，确保每次回应都符合上述设定。`;
   };
-
-  const handleScroll = useCallback(() => {
-    if (chatContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      
-      // 只在非打字状态下更新滚动按钮显示
-      if (!isTyping) {
-        setShowScrollToBottom(!isNearBottom);
-      }
-
-      // 检测滚动方向
-      const isScrollingDown = scrollTop > lastScrollPosition.current;
-      lastScrollPosition.current = scrollTop;
-
-      // 更新滚动状态
-      setIsScrolling(true);
-      if (scrollTimeout.current) {
-        clearTimeout(scrollTimeout.current);
-      }
-      scrollTimeout.current = setTimeout(() => {
-        setIsScrolling(false);
-      }, 150);
-
-      // 标记消息为已读
-      if (isNearBottom) {
-        setUnreadCount(0);
-        setMessages(prev => prev.map(msg => ({ ...msg, isRead: true })));
-      }
-    }
-  }, [isTyping]);
 
   const handleSendMessage = async () => {
     console.log('Attempting to send message:', inputMessage);
@@ -1114,8 +1074,6 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
                   }
                 }}
                 className="absolute left-0 w-[480px] bg-black/40 backdrop-blur-xl rounded-lg border-2 border-primary/30 z-10 shadow-2xl shadow-primary/20 select-none before:content-[''] before:absolute before:inset-0 before:border-t-2 before:border-primary/10 before:rounded-lg before:pointer-events-none after:content-[''] after:absolute after:top-0 after:left-0 after:w-32 after:h-1 after:bg-primary/30"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseMove={(e) => e.stopPropagation()}
               >

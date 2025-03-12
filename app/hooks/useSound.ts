@@ -2,9 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 
+interface AudioContext extends BaseAudioContext {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 // 创建音频上下文和音调生成器
 const createTone = (frequency: number, duration: number) => {
-  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const audioContext = new (window.AudioContext || (window as unknown as AudioContext).webkitAudioContext)();
   const oscillator = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
 

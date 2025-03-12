@@ -1,26 +1,10 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
-import { PaperAirplaneIcon } from '@heroicons/react/24/outline';
-import TypewriterText from './components/TypewriterText';
-import OperatorGallery from './components/OperatorGallery';
 import Image from 'next/image';
-import { getRandomResponse } from './utils/responses';
-import { useSound } from './hooks/useSound';
-import PosterGallery from './components/PosterGallery';
 import Link from 'next/link';
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'ai';
-  typing?: boolean;
-}
+import PosterGallery from './components/PosterGallery';
 
 export default function Home() {
-  const [isGreeting] = useState(true);
-
   return (
     <main className="flex min-h-screen flex-col items-center justify-between relative overflow-hidden">
       {/* 背景 */}

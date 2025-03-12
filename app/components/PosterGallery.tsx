@@ -221,54 +221,54 @@ interface TypewriterTextProps {
 }
 
 // 提取 markdownComponents 到组件外部
-const markdownComponents: Partial<Components> = {
-  code: ({className, children}) => {
-    const match = /language-(\w+)/.exec(className || '');
-    return match ? (
-      <pre className="bg-black/30 p-4 rounded-lg overflow-x-auto">
-        <code className={className}>
+  const markdownComponents: Partial<Components> = {
+    code: ({className, children}) => {
+      const match = /language-(\w+)/.exec(className || '');
+      return match ? (
+        <pre className="bg-black/30 p-4 rounded-lg overflow-x-auto">
+          <code className={className}>
+            {children}
+          </code>
+        </pre>
+      ) : (
+        <code className="bg-black/30 px-1 rounded">
           {children}
         </code>
-      </pre>
-    ) : (
-      <code className="bg-black/30 px-1 rounded">
+      );
+    },
+    a: ({children, href}) => (
+      <a href={href} className="text-primary hover:text-primary/80 underline">
         {children}
-      </code>
-    );
-  },
-  a: ({children, href}) => (
-    <a href={href} className="text-primary hover:text-primary/80 underline">
-      {children}
-    </a>
-  ),
-  ul: ({children}) => (
-    <ul className="list-disc list-inside my-2">
-      {children}
-    </ul>
-  ),
-  ol: ({children}) => (
-    <ol className="list-decimal list-inside my-2">
-      {children}
-    </ol>
-  ),
-  table: ({children}) => (
-    <div className="overflow-x-auto my-4">
-      <table className="min-w-full divide-y divide-primary/20">
+      </a>
+    ),
+    ul: ({children}) => (
+      <ul className="list-disc list-inside my-2">
         {children}
-      </table>
-    </div>
-  ),
-  th: ({children}) => (
-    <th className="px-4 py-2 bg-primary/10 text-left">
-      {children}
-    </th>
-  ),
-  td: ({children}) => (
-    <td className="px-4 py-2 border-t border-primary/10">
-      {children}
-    </td>
-  )
-};
+      </ul>
+    ),
+    ol: ({children}) => (
+      <ol className="list-decimal list-inside my-2">
+        {children}
+      </ol>
+    ),
+    table: ({children}) => (
+      <div className="overflow-x-auto my-4">
+        <table className="min-w-full divide-y divide-primary/20">
+          {children}
+        </table>
+      </div>
+    ),
+    th: ({children}) => (
+      <th className="px-4 py-2 bg-primary/10 text-left">
+        {children}
+      </th>
+    ),
+    td: ({children}) => (
+      <td className="px-4 py-2 border-t border-primary/10">
+        {children}
+      </td>
+    )
+  };
 
 // TypewriterText 组件
 const TypewriterText: React.FC<TypewriterTextProps> = ({ text, delay = 0.05, className = "", onComplete, messageId }) => {
@@ -588,7 +588,11 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   );
 };
 
-export default function PosterGallery() {
+interface PosterGalleryProps {
+  onSelectPoster?: (id: number) => void;
+}
+
+export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   const [posters, setPosters] = useState<string[]>([]);
   const [selectedPoster, setSelectedPoster] = useState<PosterInfo | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -712,12 +716,14 @@ export default function PosterGallery() {
         
         // 设置新角色
         setSelectedId(posterId);
-        setSelectedPoster(newPoster);
+      setSelectedPoster(newPoster);
         
         // 加载新角色的聊天记录
         const characterHistory = characterHistories[posterId] || [];
         setMessages(characterHistory);
-        
+
+        // 触发选择回调
+        onSelectPoster?.(posterId);
       } else {
         setSelectedPoster(newPoster);
       }
@@ -833,7 +839,7 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
     };
 
     setMessages(prev => [...prev, userMessage]);
-
+    
     try {
       const newHistory = [
         { role: 'system', content: generateSystemPrompt(currentPoster) },
@@ -865,11 +871,11 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
       ]);
 
       const assistantMessage: Message = {
-        role: 'assistant',
-        content: data.content,
-        timestamp: Date.now(),
-        status: 'sent',
-        isRead: false
+          role: 'assistant',
+          content: data.content,
+          timestamp: Date.now(),
+          status: 'sent',
+          isRead: false
       };
 
       const updatedMessages = [
@@ -962,19 +968,19 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
         {/* 聊天头部 */}
         <div className="relative px-6 py-4 border-b border-primary/20 bg-black/20">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {selectedId ? (
-                <>
-                  <CharacterAvatar posterId={selectedId} />
-                  <div>
-                    <h3 className="text-lg font-bold text-primary">{posterData[selectedId].name}</h3>
-                    <p className="text-sm text-primary/70">{posterData[selectedId].title}</p>
-                  </div>
-                </>
-              ) : (
-                <div className="text-primary/50">请从左侧选择对话角色</div>
-              )}
-            </div>
+          <div className="flex items-center space-x-4">
+            {selectedId ? (
+              <>
+                <CharacterAvatar posterId={selectedId} />
+                <div>
+                  <h3 className="text-lg font-bold text-primary">{posterData[selectedId].name}</h3>
+                  <p className="text-sm text-primary/70">{posterData[selectedId].title}</p>
+                </div>
+              </>
+            ) : (
+              <div className="text-primary/50">请从左侧选择对话角色</div>
+            )}
+          </div>
             {selectedId && messages.length > 0 && (
               <button
                 onClick={() => {
@@ -989,7 +995,7 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
                 清除历史记录
               </button>
             )}
-          </div>
+                  </div>
         </div>
 
         {/* 聊天内容 */}
@@ -1257,4 +1263,4 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
       </div>
     </>
   );
-} 
+}

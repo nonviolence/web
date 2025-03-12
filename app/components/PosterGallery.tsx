@@ -221,54 +221,54 @@ interface TypewriterTextProps {
 }
 
 // 提取 markdownComponents 到组件外部
-  const markdownComponents: Partial<Components> = {
-    code: ({className, children}) => {
-      const match = /language-(\w+)/.exec(className || '');
-      return match ? (
-        <pre className="bg-black/30 p-4 rounded-lg overflow-x-auto">
-          <code className={className}>
-            {children}
-          </code>
-        </pre>
-      ) : (
-        <code className="bg-black/30 px-1 rounded">
+const markdownComponents: Partial<Components> = {
+  code: ({className, children}) => {
+    const match = /language-(\w+)/.exec(className || '');
+    return match ? (
+      <pre className="bg-black/30 p-4 rounded-lg overflow-x-auto">
+        <code className={className}>
           {children}
         </code>
-      );
-    },
-    a: ({children, href}) => (
-      <a href={href} className="text-primary hover:text-primary/80 underline">
+      </pre>
+    ) : (
+      <code className="bg-black/30 px-1 rounded">
         {children}
-      </a>
-    ),
-    ul: ({children}) => (
-      <ul className="list-disc list-inside my-2">
+      </code>
+    );
+  },
+  a: ({children, href}) => (
+    <a href={href} className="text-primary hover:text-primary/80 underline">
+      {children}
+    </a>
+  ),
+  ul: ({children}) => (
+    <ul className="list-disc list-inside my-2">
+      {children}
+    </ul>
+  ),
+  ol: ({children}) => (
+    <ol className="list-decimal list-inside my-2">
+      {children}
+    </ol>
+  ),
+  table: ({children}) => (
+    <div className="overflow-x-auto my-4">
+      <table className="min-w-full divide-y divide-primary/20">
         {children}
-      </ul>
-    ),
-    ol: ({children}) => (
-      <ol className="list-decimal list-inside my-2">
-        {children}
-      </ol>
-    ),
-    table: ({children}) => (
-      <div className="overflow-x-auto my-4">
-        <table className="min-w-full divide-y divide-primary/20">
-          {children}
-        </table>
-      </div>
-    ),
-    th: ({children}) => (
-      <th className="px-4 py-2 bg-primary/10 text-left">
-        {children}
-      </th>
-    ),
-    td: ({children}) => (
-      <td className="px-4 py-2 border-t border-primary/10">
-        {children}
-      </td>
-    )
-  };
+      </table>
+    </div>
+  ),
+  th: ({children}) => (
+    <th className="px-4 py-2 bg-primary/10 text-left">
+      {children}
+    </th>
+  ),
+  td: ({children}) => (
+    <td className="px-4 py-2 border-t border-primary/10">
+      {children}
+    </td>
+  )
+};
 
 // TypewriterText 组件
 const TypewriterText: React.FC<TypewriterTextProps> = ({ text, delay = 0.05, className = "", onComplete, messageId }) => {
@@ -485,7 +485,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   }, []);
 
   return (
-    <div className="flex flex-col h-[400px]">
+    <div className="flex flex-col h-full">
       <div 
         ref={listRef}
         className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4 space-y-4"
@@ -610,6 +610,7 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   const lastPosterId = useRef<number | null>(null);
   const [conversationHistory, setConversationHistory] = useState<{ role: string; content: string; }[]>([]);
   const [characterHistories, setCharacterHistories] = useState<Record<number, Message[]>>({});
+  const [isMobile, setIsMobile] = useState(false);
 
   // 简化滚动到底部函数
   const scrollToBottom = useCallback(() => {
@@ -648,6 +649,16 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
     saveToLocalStorage(characterHistories);
   }, [characterHistories]);
 
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile(); // 初始检查
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const handleMouseDown = (e: React.MouseEvent) => {
     // 如果点击的是介绍页，不触发拖动
     if (detailsRef.current?.contains(e.target as Node)) {
@@ -676,19 +687,6 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
     setIsDragging(false);
   };
 
-  const handleClickOutside = useCallback((event: MouseEvent) => {
-    if (detailsRef.current && !detailsRef.current.contains(event.target as Node)) {
-      setSelectedPoster(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [handleClickOutside]);
-
   const handlePosterClick = (index: number) => {
     if (isDragging) return;
     const src = posters[index];
@@ -714,9 +712,14 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
         setIsTypingComplete(true);
         setConversationHistory([]);
         
-        // 设置新角色
+        // 设置新角色并暂时隐藏详情弹窗
         setSelectedId(posterId);
-      setSelectedPoster(newPoster);
+        setSelectedPoster(null); // 暂时隐藏详情弹窗
+        
+        // 使用setTimeout确保动画效果平滑
+        setTimeout(() => {
+          setSelectedPoster(newPoster); // 显示新的详情弹窗
+        }, 300);
         
         // 加载新角色的聊天记录
         const characterHistory = characterHistories[posterId] || [];
@@ -725,7 +728,8 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
         // 触发选择回调
         onSelectPoster?.(posterId);
       } else {
-        setSelectedPoster(newPoster);
+        // 如果点击相同的海报，切换详情弹窗的显示状态
+        setSelectedPoster(selectedPoster === null ? newPoster : null);
       }
       lastPosterId.current = posterId;
     }
@@ -913,280 +917,161 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true);
+    setStartX(e.touches[0].pageX - (containerRef.current?.offsetLeft || 0));
+    setScrollLeft(containerRef.current?.scrollLeft || 0);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const x = e.touches[0].pageX - (containerRef.current?.offsetLeft || 0);
+    const walk = (x - startX) * 2;
+    if (containerRef.current) {
+      containerRef.current.scrollLeft = scrollLeft - walk;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
   return (
-    <>
+    <div className="relative w-full h-screen">
       {/* 聊天界面 */}
-      <div className="fixed left-1/2 top-32 -translate-x-1/2 w-[600px] bg-black/40 backdrop-blur-xl rounded-lg shadow-2xl shadow-primary/20 relative overflow-hidden z-50
-        before:content-[''] before:absolute before:inset-0 before:border-2 before:border-primary/30 before:rounded-lg before:pointer-events-none
-        after:content-[''] after:absolute after:inset-0 after:border-[3px] after:border-transparent after:rounded-lg after:pointer-events-none
-        after:bg-[linear-gradient(90deg,transparent_0%,rgba(var(--primary-rgb),0.2)_50%,transparent_100%)] after:animate-border-flow
-        before:bg-[linear-gradient(45deg,rgba(var(--primary-rgb),0.1)_25%,transparent_25%,transparent_75%,rgba(var(--primary-rgb),0.1))] before:bg-[length:20px_20px] before:opacity-30">
-        {/* 背景图片 */}
-        <div className="absolute inset-0 opacity-20">
-          <Image
-            src="/images/chat_bg.png"
-            alt="Chat Background"
-            fill
-            className="object-cover"
-          />
-        </div>
-
-        {/* 科技风装饰元素 */}
-        <div className="absolute inset-0 pointer-events-none">
-          {/* 扫描线动画 */}
-          <div className="absolute inset-0 bg-[linear-gradient(transparent_0%,rgba(var(--primary-rgb),0.05)_50%,transparent_100%)] animate-scanning-line" />
-          
-          {/* 角落装饰 */}
-          <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-primary/30 rounded-tl-lg" />
-          <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-primary/30 rounded-tr-lg" />
-          <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-primary/30 rounded-bl-lg" />
-          <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-primary/30 rounded-br-lg" />
-
-          {/* 科技纹理 */}
-          <div className="absolute inset-0 bg-[url('/images/tech_pattern.png')] opacity-5" />
-          
-          {/* 光效装饰 */}
-          <div className="absolute -top-32 -right-32 w-64 h-64 bg-primary/5 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-primary/5 rounded-full blur-3xl animate-pulse delay-1000" />
-        </div>
-
-        {/* 装饰线条 */}
-        <div className="absolute top-0 left-0 w-32 h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-pulse" />
-        <div className="absolute top-0 right-0 w-32 h-1 bg-gradient-to-l from-transparent via-primary/50 to-transparent animate-pulse delay-300" />
-        <div className="absolute bottom-0 left-0 w-32 h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent animate-pulse delay-600" />
-        <div className="absolute bottom-0 right-0 w-32 h-1 bg-gradient-to-l from-transparent via-primary/50 to-transparent animate-pulse delay-900" />
-        
-        <div className="absolute top-0 left-0 w-1 h-32 bg-gradient-to-b from-transparent via-primary/50 to-transparent animate-pulse" />
-        <div className="absolute top-0 right-0 w-1 h-32 bg-gradient-to-b from-transparent via-primary/50 to-transparent animate-pulse delay-300" />
-        <div className="absolute bottom-0 left-0 w-1 h-32 bg-gradient-to-t from-transparent via-primary/50 to-transparent animate-pulse delay-600" />
-        <div className="absolute bottom-0 right-0 w-1 h-32 bg-gradient-to-t from-transparent via-primary/50 to-transparent animate-pulse delay-900" />
-
-        {/* 数据流动画 */}
-        <div className="absolute inset-y-0 left-0 w-[2px] bg-gradient-to-b from-transparent via-primary/30 to-transparent animate-data-flow" />
-        <div className="absolute inset-y-0 right-0 w-[2px] bg-gradient-to-t from-transparent via-primary/30 to-transparent animate-data-flow delay-500" />
-
-        {/* 聊天头部 */}
-        <div className="relative px-6 py-4 border-b border-primary/20 bg-black/20">
-          <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            {selectedId ? (
-              <>
-                <CharacterAvatar posterId={selectedId} />
-                <div>
-                  <h3 className="text-lg font-bold text-primary">{posterData[selectedId].name}</h3>
-                  <p className="text-sm text-primary/70">{posterData[selectedId].title}</p>
+      <div className={`
+        fixed top-0 right-0 h-screen bg-black/40 backdrop-blur-md
+        ${isMobile ? 'w-[280px]' : 'w-[400px]'}
+        border-l border-white/10 z-20
+      `}>
+        <div className="h-full flex flex-col">
+          {selectedId ? (
+            <>
+              {/* 头部信息 */}
+              <div className="flex-none p-4 border-b border-white/10">
+                <CharacterAvatar posterId={selectedId} className="w-12 h-12" />
+                <div className="ml-4">
+                  <h3 className="text-lg font-bold text-primary">
+                    {posterData[selectedId].name}
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    {posterData[selectedId].title}
+                  </p>
                 </div>
-              </>
-            ) : (
-              <div className="text-primary/50">请从左侧选择对话角色</div>
-            )}
-          </div>
-            {selectedId && messages.length > 0 && (
-              <button
-                onClick={() => {
-                  const updatedHistories = { ...characterHistories };
-                  delete updatedHistories[selectedId];
-                  setCharacterHistories(updatedHistories);
-                  saveToLocalStorage(updatedHistories);
-                  setMessages([]);
-                }}
-                className="px-3 py-1 text-sm text-primary/70 hover:text-primary border border-primary/30 rounded-md hover:bg-primary/10 transition-colors"
-              >
-                清除历史记录
-              </button>
-            )}
-                  </div>
-        </div>
+              </div>
 
-        {/* 聊天内容 */}
-        <ChatHistory
-          messages={messages}
-          selectedId={selectedId}
-          isTyping={isTyping}
-          isTypingComplete={isTypingComplete}
-          onScrollToBottom={scrollToBottom}
-        />
+              {/* 聊天历史记录 */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ChatHistory
+                  messages={messages}
+                  selectedId={selectedId}
+                  isTyping={isTyping}
+                  isTypingComplete={isTypingComplete}
+                  onScrollToBottom={scrollToBottom}
+                />
+              </div>
 
-        {/* 输入框区域 */}
-        <div className="relative px-6 py-4 border-t border-primary/20 bg-black/20">
-          <form 
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex space-x-2 relative z-10"
-          >
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder={selectedId ? `与 ${posterData[selectedId].name} 对话...` : "请先选择对话角色"}
-              disabled={!selectedId || isTyping}
-              className="flex-1 bg-black/20 border border-primary/30 rounded-lg px-4 py-2 text-white placeholder-primary/50 focus:outline-none focus:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed relative z-10"
-            />
-            <button
-              type="submit"
-              disabled={!inputMessage.trim() || isTyping || !selectedId}
-              className="px-6 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 relative z-10 flex items-center space-x-2"
-            >
-              <span>发送</span>
-              {isTyping && (
-                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              )}
-            </button>
-          </form>
+              {/* 输入框区域 */}
+              <div className="flex-none p-4 border-t border-white/10">
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }}
+                  className="flex space-x-2"
+                >
+                  <input
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    placeholder={`与 ${posterData[selectedId].name} 对话...`}
+                    className="flex-1 bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-400"
+                    disabled={isTyping}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!inputMessage.trim() || isTyping}
+                    className="px-4 py-2 bg-primary/20 text-primary rounded-lg disabled:opacity-50"
+                  >
+                    发送
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
+                <span className="text-2xl text-primary">👋</span>
+              </div>
+              <h3 className="text-xl font-bold text-primary mb-2">欢迎来到罗德岛</h3>
+              <p className="text-sm text-gray-400">
+                请从左侧选择一位干员开始对话
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 海报选择区域 */}
-      <div className="fixed left-8 top-32 w-[30vw] select-none z-40 before:content-[''] before:absolute before:inset-0 before:bg-[linear-gradient(45deg,rgba(0,0,0,0.2)_25%,transparent_25%,transparent_75%,rgba(0,0,0,0.2))] before:bg-[length:40px_40px] before:opacity-10 before:pointer-events-none">
+      {/* 海报展示区域 */}
+      <div className={`
+        ${isMobile ? 'fixed left-0 right-0 top-24 px-4' : 'fixed left-8 top-32 w-[30vw]'}
+        select-none z-40
+      `}>
         <div className="relative">
           <AnimatePresence mode="wait">
             {selectedPoster && (
               <motion.div
                 ref={detailsRef}
-                initial={{ 
-                  opacity: 0, 
-                  x: -100,
-                  y: 300,
-                  scale: 0.95
-                }}
-                animate={{ 
-                  opacity: 1, 
-                  x: 0,
-                  y: 300,
-                  scale: 1,
-                  transition: {
-                    type: "spring",
-                    stiffness: 300,
-                    damping: 30,
-                    mass: 1
-                  }
-                }}
-                exit={{ 
-                  opacity: 0,
-                  x: -50,
-                  y: 300,
-                  scale: 0.95,
-                  transition: {
-                    duration: 0.2,
-                    ease: "easeOut"
-                  }
-                }}
-                className="absolute left-0 w-[480px] bg-black/40 backdrop-blur-xl rounded-lg border-2 border-primary/30 z-10 shadow-2xl shadow-primary/20 select-none before:content-[''] before:absolute before:inset-0 before:border-t-2 before:border-primary/10 before:rounded-lg before:pointer-events-none after:content-[''] after:absolute after:top-0 after:left-0 after:w-32 after:h-1 after:bg-primary/30"
-                onMouseDown={(e) => e.stopPropagation()}
-                onMouseMove={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, x: -100, y: isMobile ? 50 : 300, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, y: isMobile ? 50 : 300, scale: 1 }}
+                exit={{ opacity: 0, x: -50, y: isMobile ? 50 : 300, scale: 0.95 }}
+                className={`
+                  absolute left-0 bg-black/40 backdrop-blur-xl rounded-lg border-2 border-primary/30 z-10
+                  ${isMobile ? 'w-full' : 'w-[480px]'}
+                `}
               >
-                <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
-                  <div className="sticky top-0 bg-black/40 backdrop-blur-xl z-20 px-6 py-3 border-b border-primary/20">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <h2 className="text-2xl font-bold text-primary mb-1 select-none tracking-wider">
-                          {selectedPoster.name}
-                        </h2>
-                        <div className="text-base text-primary/70 select-none tracking-wide">
-                          <TypewriterText 
-                            text={selectedPoster.title} 
-                            delay={0.08} 
-                            className="w-full"
-                            messageId={Date.now()} 
-                          />
-                        </div>
-                      </div>
-                      <button 
-                        className="text-primary/60 hover:text-primary text-xl transform hover:rotate-90 transition-transform duration-300 w-8 h-8 flex items-center justify-center border border-primary/20 rounded-full hover:border-primary/40 flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedPoster(null);
-                        }}
-                      >
-                        ×
-                      </button>
+                {/* 角色详情内容 */}
+                <div className="p-6 space-y-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-primary mb-2">{selectedPoster.name}</h2>
+                    <p className="text-primary/70">{selectedPoster.title}</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <p className="text-sm text-primary/70">{selectedPoster.description}</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <span className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
+                        {selectedPoster.profession}
+                      </span>
+                      <span className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
+                        {selectedPoster.position}
+                      </span>
+                      <span className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
+                        {selectedPoster.faction}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="px-6 py-4 space-y-6">
-                    {/* 基本信息 */}
-                    <motion.div 
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      className="grid grid-cols-2 gap-3 py-3 border-y border-primary/20 relative before:content-[''] before:absolute before:left-0 before:top-0 before:w-2 before:h-full before:bg-gradient-to-b before:from-primary/30 before:to-transparent"
-                    >
-                      <div className="min-w-0">
-                        <span className="text-primary/50 text-xs tracking-widest uppercase block mb-1">职业</span>
-                        <div className="text-primary mt-0.5 select-none overflow-hidden">
-                          {selectedPoster.profession}
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-primary/50 text-xs tracking-widest uppercase block mb-1">所属</span>
-                        <div className="text-primary mt-0.5 select-none overflow-hidden">
-                          {selectedPoster.faction}
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-primary/50 text-xs tracking-widest uppercase block mb-1">职位</span>
-                        <div className="text-primary mt-0.5 select-none overflow-hidden">
-                          {selectedPoster.position}
-                        </div>
-                      </div>
-                    </motion.div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-primary">技能</h3>
+                    <p className="text-sm text-primary/70">{selectedPoster.skill}</p>
+                  </div>
 
-                    {/* 技能 */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <h3 className="text-base font-bold text-primary mb-1 select-none">代表技能</h3>
-                      <div className="text-sm text-primary/70 select-none">
-                        <TypewriterText 
-                          text={selectedPoster.skill} 
-                          delay={0.03}
-                          messageId={Date.now()}
-                        />
-                      </div>
-                    </motion.div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-primary">性格特征</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedPoster.traits.map((trait, index) => (
+                        <span key={index} className="px-2 py-1 bg-primary/10 rounded-full text-xs text-primary">
+                          {trait}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
 
-                    {/* 描述 */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                      className="w-full"
-                    >
-                      <h3 className="text-base font-bold text-primary mb-1 select-none">档案记录</h3>
-                      <div className="text-sm text-primary/70 leading-relaxed select-none">
-                        <TypewriterText 
-                          text={selectedPoster.story} 
-                          delay={0.02} 
-                          className="w-full wrap"
-                          messageId={Date.now()}
-                        />
-                      </div>
-                    </motion.div>
-
-                    {/* 装饰元素 */}
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0 }}
-                      animate={{ opacity: 0.05, scale: 1 }}
-                      transition={{ 
-                        delay: 0.2,
-                        duration: 0.8,
-                        type: "spring",
-                        stiffness: 200
-                      }}
-                      className="absolute top-0 right-0 w-32 h-32 pointer-events-none"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary to-transparent rounded-full animate-pulse" />
-                    </motion.div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-primary">背景故事</h3>
+                    <p className="text-sm text-primary/70">{selectedPoster.story}</p>
                   </div>
                 </div>
               </motion.div>
@@ -1196,11 +1081,36 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
           {/* 海报列表 */}
           <div 
             ref={containerRef}
-            className="overflow-hidden cursor-grab active:cursor-grabbing select-none custom-scrollbar-hidden relative border-2 border-primary/10 rounded-lg"
-            onMouseDown={handleMouseDown}
+            className="overflow-hidden cursor-grab active:cursor-grabbing"
+            onWheel={(e) => {
+              // 检查滚轮事件是否来自海报列表区域
+              const rect = containerRef.current?.getBoundingClientRect();
+              if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                e.preventDefault();
+                if (containerRef.current) {
+                  containerRef.current.scrollLeft += e.deltaY;
+                }
+              }
+            }}
+            onMouseDown={(e) => {
+              // 检查点击事件是否来自海报列表区域
+              const rect = containerRef.current?.getBoundingClientRect();
+              if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                handleMouseDown(e);
+              }
+            }}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onTouchStart={(e) => {
+              // 检查触摸事件是否来自海报列表区域
+              const rect = containerRef.current?.getBoundingClientRect();
+              if (rect && e.touches[0].clientY >= rect.top && e.touches[0].clientY <= rect.bottom) {
+                handleTouchStart(e);
+              }
+            }}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           >
             <div className="flex space-x-4 py-2">
               {posters.map((src, index) => (
@@ -1210,7 +1120,10 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="relative w-[140px] h-[280px] rounded-lg overflow-hidden cursor-pointer group flex-none"
+                    className={`
+                      relative rounded-lg overflow-hidden cursor-pointer group flex-none
+                      ${isMobile ? 'w-[100px] h-[200px]' : 'w-[140px] h-[280px]'}
+                    `}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isDragging) {
@@ -1220,40 +1133,16 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
                     onMouseEnter={() => handlePosterHover(index)}
                     onMouseLeave={handlePosterHoverEnd}
                   >
-                    {/* 灰度底图 */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900" />
-                    
                     <Image
                       src={src}
                       alt={`Poster ${index + 1}`}
                       fill
-                      className={`object-contain relative z-[1] transition-all duration-500 select-none [&>img]:select-none [&>img]:-webkit-user-drag-none hover:saturate-150 ${
-                        selectedPoster?.id === index + 1 ? 'brightness-110 scale-105' : 'group-hover:brightness-110 group-hover:scale-105'
+                      className={`object-contain transition-all duration-300 ${
+                        selectedPoster?.id === index + 1 ? 'scale-105' : 'group-hover:scale-105'
                       }`}
                       priority={index < 4}
                       draggable={false}
                     />
-                    
-                    <div className={`absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent transition-opacity duration-300 z-[2] ${
-                      selectedPoster?.id === index + 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                    }`} />
-                    
-                    <div className={`absolute bottom-0 left-0 w-full p-4 transform transition-transform duration-300 z-[3] bg-gradient-to-t from-black/90 to-transparent ${
-                      selectedPoster?.id === index + 1 ? 'translate-y-0' : 'translate-y-full group-hover:translate-y-0'
-                    }`}>
-                      <h3 className="text-lg font-bold text-primary select-none mb-1 line-clamp-1">
-                        {(() => {
-                          const posterId = parseInt(src.match(/poster_(\d+)/)?.[1] || '0');
-                          return posterData[posterId]?.name;
-                        })()}
-                      </h3>
-                      <p className="text-sm text-primary/70 select-none line-clamp-2">
-                        {(() => {
-                          const posterId = parseInt(src.match(/poster_(\d+)/)?.[1] || '0');
-                          return posterData[posterId]?.title;
-                        })()}
-                      </p>
-                    </div>
                   </motion.div>
                 )
               ))}
@@ -1261,6 +1150,6 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

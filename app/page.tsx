@@ -12,11 +12,23 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
   const [grayscaleImage, setGrayscaleImage] = useState<string | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [imageCache, setImageCache] = useState<Record<number, { 
     grayscale: string; 
     original: string;
     dimensions: { width: number; height: number } 
   }>>({});
+
+  // 检测视窗宽度
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile(); // 初始检查
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // 预加载下一张图片
   const preloadNextImage = (currentId: number) => {
@@ -139,10 +151,12 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
 
   // 使用1024为基准尺寸
   const baseSize = 1024;
+  // 手机模式下缩小尺寸
+  const scaleFactor = isMobile ? 0.5 : 1;
   // 前景图使用原始尺寸
-  const fgSize = baseSize;
+  const fgSize = Math.round(baseSize * scaleFactor);
   // 背景图使用1.4倍尺寸
-  const bgSize = Math.round(baseSize * 1.4);
+  const bgSize = Math.round(baseSize * 1.4 * scaleFactor);
 
   return (
     <div className="fixed inset-0 z-0 overflow-visible pointer-events-none">
@@ -159,7 +173,7 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
           }}
           className="absolute left-1/2"
           style={{ 
-            transform: 'translate(calc(-50% + 300px), 1400px)'
+            transform: `translate(calc(-50% + ${isMobile ? '-150px' : '100px'}), ${isMobile ? '600px' : '1400px'})`
           }}
         >
           {grayscaleImage ? (
@@ -213,7 +227,11 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
             ease: [0.22, 1, 0.36, 1]
           }}
           className="absolute origin-bottom-right z-10"
-          style={{ right: '-100px', bottom: '-300px' }}
+          style={{ 
+            right: isMobile ? '50%' : '-100px', 
+            bottom: isMobile ? '-100px' : '-300px',
+            transform: isMobile ? 'translateX(50%)' : 'none'
+          }}
         >
           <div className="relative" style={{ width: fgSize, height: fgSize }}>
             <Image
@@ -232,6 +250,17 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
 
 export default function Home() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile(); // 初始检查
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between relative overflow-hidden">
@@ -239,16 +268,18 @@ export default function Home() {
       <div className="absolute inset-0 bg-gradient-to-b from-black to-gray-900" />
       
       {/* 顶部导航 */}
-      <nav className="w-full flex justify-between items-center p-8 relative z-10">
+      <nav className={`w-full flex justify-between items-center ${isMobile ? 'p-4' : 'p-8'} relative z-10`}>
         <Link href="/" className="flex items-center space-x-6">
           <Image
             src="/images/logo_50.png"
             alt="Rhodes Island Logo"
-            width={160}
-            height={160}
+            width={isMobile ? 80 : 160}
+            height={isMobile ? 80 : 160}
             className="rounded-full border-4 border-primary/30 hover:border-primary/50 transition-colors"
           />
-          <span className="text-3xl font-bold text-primary tracking-wide hover:text-primary/80 transition-colors">Rhodes Island</span>
+          <span className={`${isMobile ? 'text-xl' : 'text-3xl'} font-bold text-primary tracking-wide hover:text-primary/80 transition-colors`}>
+            Rhodes Island
+          </span>
         </Link>
       </nav>
 

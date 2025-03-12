@@ -422,7 +422,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const lastMessageRef = useRef<HTMLDivElement>(null);
-  const scrollAnimationRef = useRef<number>();
+  const scrollAnimationRef = useRef<number | undefined>(undefined);
 
   // 添加平滑滚动函数
   const smoothScroll = useCallback((element: HTMLElement, target: number, duration: number) => {
@@ -623,7 +623,7 @@ export default function PosterGallery() {
 
   useEffect(() => {
     // 预加载图片并只保留成功加载的
-    const posterIds = Object.keys(posterData).map(Number);  // 使用 posterData 中的实际ID
+    const posterIds = Object.keys(posterData).map(Number);
     const posterImages = posterIds.map(id => `/images/poster_${id}.png`);
     
     Promise.all(
@@ -1299,94 +1299,4 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
       </div>
     </>
   );
-}
-
-// 添加到全局样式文件中
-const styles = `
-  .custom-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
-    border-radius: 3px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-  }
-
-  .custom-scrollbar-hidden {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .custom-scrollbar-hidden::-webkit-scrollbar {
-    display: none;
-  }
-
-  img {
-    user-select: none;
-    -webkit-user-drag: none;
-    -khtml-user-drag: none;
-    -moz-user-drag: none;
-    -o-user-drag: none;
-  }
-
-  @keyframes border-flow {
-    0% {
-      background-position: 0% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
-  }
-
-  @keyframes scanning-line {
-    0% {
-      transform: translateY(-100%);
-    }
-    100% {
-      transform: translateY(100%);
-    }
-  }
-
-  @keyframes data-flow {
-    0% {
-      transform: translateY(-100%);
-      opacity: 0;
-    }
-    50% {
-      opacity: 1;
-    }
-    100% {
-      transform: translateY(100%);
-      opacity: 0;
-    }
-  }
-
-  .animate-border-flow {
-    animation: border-flow 8s linear infinite;
-  }
-
-  .animate-scanning-line {
-    animation: scanning-line 4s linear infinite;
-  }
-
-  .animate-data-flow {
-    animation: data-flow 3s linear infinite;
-  }
-
-  :root {
-    --primary-rgb: 59, 130, 246;
-  }
-`; 
+} 

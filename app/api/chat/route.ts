@@ -12,7 +12,7 @@ async function retryOperation<T>(
   maxRetries: number = 3,
   delay: number = 2000
 ): Promise<T> {
-  let lastError: any;
+  let lastError: Error | unknown = null;
   
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
       content: response.choices[0].message.content 
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Chat API Error:', error);
     
     // 区分不同类型的错误

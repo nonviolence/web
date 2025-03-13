@@ -613,6 +613,7 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   const [characterHistories, setCharacterHistories] = useState<Record<number, Message[]>>({});
   const [isMobile, setIsMobile] = useState(false);
   const touchMoveHandler = useRef<((e: TouchEvent) => void) | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 简化滚动到底部函数
   const scrollToBottom = useCallback(() => {
@@ -826,35 +827,69 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
 请以此角色身份进行对话，确保每次回应都符合上述设定。`;
   };
 
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3) {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 50000); // 50秒超时
+        
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        return data;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        console.error(`Attempt ${attempt + 1} failed:`, error);
+        
+        if (attempt < maxRetries - 1) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+          await sleep(delay);
+        }
+      }
+    }
+    
+    throw lastError;
+  }
+
   const handleSendMessage = async () => {
-    console.log('Attempting to send message:', inputMessage);
     const trimmedMessage = inputMessage.trim();
     const currentPoster = selectedId ? posterData[selectedId] : null;
     
     if (!trimmedMessage || !currentPoster || isTyping) {
-      console.log('Cannot send message:', { 
-        hasInput: !!trimmedMessage, 
-        hasSelectedPoster: !!currentPoster,
-        selectedId,
-        isTyping 
-      });
       return;
     }
 
     setInputMessage('');
     setIsTyping(true);
     setIsTypingComplete(false);
+    setErrorMessage(null);
     
     const userMessage: Message = {
       role: 'user',
       content: trimmedMessage,
       timestamp: Date.now(),
-      status: 'sending',
-      isRead: true
+      status: 'sending'
     };
 
     setMessages(prev => [...prev, userMessage]);
-    
+
     try {
       const newHistory = [
         { role: 'system', content: generateSystemPrompt(currentPoster) },
@@ -862,7 +897,7 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
         { role: 'user', content: trimmedMessage }
       ];
 
-      const response = await fetch('/api/chat', {
+      const data = await fetchWithRetry('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -870,27 +905,17 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
         body: JSON.stringify({ messages: newHistory }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API 请求失败: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
       setConversationHistory([
         ...newHistory,
         { role: 'assistant', content: data.content }
       ]);
 
       const assistantMessage: Message = {
-          role: 'assistant',
-          content: data.content,
-          timestamp: Date.now(),
-          status: 'sent',
-          isRead: false
+        role: 'assistant',
+        content: data.content,
+        timestamp: Date.now(),
+        status: 'sent',
+        isRead: false
       };
 
       const updatedMessages = [
@@ -918,12 +943,26 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
       }, data.content.length * 20 + 500);
 
     } catch (error) {
-      console.error('调用 AI 接口出错：', error);
+      console.error('发送消息失败:', error);
+      
       setMessages(prev => prev.map(msg => 
         msg.timestamp === userMessage.timestamp 
           ? { ...msg, status: 'error' as const } 
           : msg
       ));
+
+      let errorMsg = '发送失败，请稍后重试';
+      if (error instanceof Error) {
+        if (error.message.includes('timeout') || error.message.includes('504')) {
+          errorMsg = '请求超时，请稍后重试';
+        } else if (error.message.includes('429')) {
+          errorMsg = '请求过于频繁，请稍后再试';
+        } else if (error.message.includes('401')) {
+          errorMsg = 'API认证失败，请联系管理员';
+        }
+      }
+      
+      setErrorMessage(errorMsg);
       setIsTyping(false);
     }
   };

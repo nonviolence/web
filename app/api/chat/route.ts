@@ -34,9 +34,12 @@ async function retryOperation<T>(
 const client = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
   baseURL: 'https://api.deepseek.com',
-  timeout: 30000, // 降低单次请求超时时间为30秒
-  maxRetries: 2, // 降低OpenAI客户端的重试次数
+  timeout: 45000, // 增加到45秒
+  maxRetries: 3, // 增加到3次重试
 });
+
+export const runtime = 'edge'; // 使用边缘运行时
+export const maxDuration = 60; // 设置最大运行时间为60秒
 
 export async function POST(req: Request) {
   try {
@@ -54,7 +57,7 @@ export async function POST(req: Request) {
     const response = await retryOperation(
       async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000); // 25秒后终止
+        const timeoutId = setTimeout(() => controller.abort(), 40000); // 40秒后终止
 
         try {
           const result = await client.chat.completions.create({
@@ -92,7 +95,7 @@ export async function POST(req: Request) {
     if (error instanceof Error) {
       if (error.name === 'AbortError' || error.message.includes('timeout')) {
         return NextResponse.json(
-          { error: '请求超时，正在重试...' },
+          { error: '请求超时，请稍后重试' },
           { status: 504 }
         );
       }

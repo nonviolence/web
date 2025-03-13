@@ -9,8 +9,8 @@ if (!process.env.DEEPSEEK_API_KEY) {
 const client = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
   baseURL: 'https://api.deepseek.com',
-  timeout: 50000, // 设置50秒超时
-  maxRetries: 3, // 最多重试3次
+  timeout: 60000, // 增加超时时间到60秒
+  maxRetries: 5, // 增加重试次数到5次
 });
 
 export async function POST(req: Request) {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45秒后终止
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55秒后终止
 
     try {
       const response = await client.chat.completions.create({
@@ -34,7 +34,11 @@ export async function POST(req: Request) {
         messages,
         temperature: 0.7,
         stream: false,
-      }, { signal: controller.signal });
+        max_tokens: 2000, // 限制最大token数
+      }, { 
+        signal: controller.signal,
+        timeout: 55000 // 设置请求超时
+      });
 
       clearTimeout(timeoutId);
 
@@ -64,6 +68,18 @@ export async function POST(req: Request) {
         return NextResponse.json(
           { error: 'API 认证失败' },
           { status: 401 }
+        );
+      }
+      if (error.message.includes('timeout')) {
+        return NextResponse.json(
+          { error: '请求超时，请稍后重试' },
+          { status: 504 }
+        );
+      }
+      if (error.message.includes('rate limit')) {
+        return NextResponse.json(
+          { error: '请求过于频繁，请稍后重试' },
+          { status: 429 }
         );
       }
     }

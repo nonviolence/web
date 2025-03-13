@@ -663,10 +663,14 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   }, []);
 
   useEffect(() => {
+    // 在effect内部保存ref的当前值
+    const currentContainer = containerRef.current;
+    const currentTouchHandler = touchMoveHandler.current;
+
     // 组件卸载时清理事件监听器
     return () => {
-      if (containerRef.current && touchMoveHandler.current) {
-        containerRef.current.removeEventListener('touchmove', touchMoveHandler.current);
+      if (currentContainer && currentTouchHandler) {
+        currentContainer.removeEventListener('touchmove', currentTouchHandler);
       }
     };
   }, []);
@@ -971,6 +975,7 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
     setIsDragging(true);
     setStartX(e.touches[0].pageX);
     setScrollLeft(containerRef.current?.scrollLeft || 0);
+    setErrorMessage(null); // 清除任何现有的错误消息
 
     // 创建并存储 touchmove 处理函数
     const touchMoveListener = (e: TouchEvent) => {

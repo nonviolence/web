@@ -145,7 +145,7 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
       setImageDimensions(null);
       setIsLoading(false);
     }
-  }, [selectedId, imageCache]);
+  }, [selectedId, imageCache, preloadNextImage]);
 
   if (!selectedId || !imageDimensions) return null;
 

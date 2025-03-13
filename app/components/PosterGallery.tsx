@@ -613,7 +613,6 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   const [characterHistories, setCharacterHistories] = useState<Record<number, Message[]>>({});
   const [isMobile, setIsMobile] = useState(false);
   const touchMoveHandler = useRef<((e: TouchEvent) => void) | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 简化滚动到底部函数
   const scrollToBottom = useCallback(() => {
@@ -827,11 +826,6 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
 请以此角色身份进行对话，确保每次回应都符合上述设定。`;
   };
 
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 2000; // 2秒
-
-  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
   const handleSendMessage = async () => {
     console.log('Attempting to send message:', inputMessage);
     const trimmedMessage = inputMessage.trim();
@@ -861,118 +855,77 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
 
     setMessages(prev => [...prev, userMessage]);
     
-    let retryCount = 0;
-    let lastError = null;
+    try {
+      const newHistory = [
+        { role: 'system', content: generateSystemPrompt(currentPoster) },
+        ...conversationHistory,
+        { role: 'user', content: trimmedMessage }
+      ];
 
-    while (retryCount < MAX_RETRIES) {
-      try {
-        const newHistory = [
-          { role: 'system', content: generateSystemPrompt(currentPoster) },
-          ...conversationHistory,
-          { role: 'user', content: trimmedMessage }
-        ];
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: newHistory }),
+      });
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 45000);
+      if (!response.ok) {
+        throw new Error(`API 请求失败: ${response.status}`);
+      }
 
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ messages: newHistory }),
-          signal: controller.signal
-        });
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
-        clearTimeout(timeoutId);
+      setConversationHistory([
+        ...newHistory,
+        { role: 'assistant', content: data.content }
+      ]);
 
-        if (!response.ok) {
-          if (response.status === 504) {
-            throw new Error('请求超时');
-          }
-          throw new Error(`API 请求失败: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        if (data.error) {
-          throw new Error(data.error);
-        }
-
-        setConversationHistory([
-          ...newHistory,
-          { role: 'assistant', content: data.content }
-        ]);
-
-        const assistantMessage: Message = {
+      const assistantMessage: Message = {
           role: 'assistant',
           content: data.content,
           timestamp: Date.now(),
           status: 'sent',
           isRead: false
+      };
+
+      const updatedMessages = [
+        ...messages,
+        {
+          ...userMessage,
+          status: 'sent' as const
+        },
+        assistantMessage
+      ];
+
+      setMessages(updatedMessages);
+
+      if (selectedId) {
+        const updatedHistories = {
+          ...characterHistories,
+          [selectedId]: updatedMessages
         };
-
-        const updatedMessages = [
-          ...messages,
-          {
-            ...userMessage,
-            status: 'sent' as const
-          },
-          assistantMessage
-        ];
-
-        setMessages(updatedMessages);
-
-        if (selectedId) {
-          const updatedHistories = {
-            ...characterHistories,
-            [selectedId]: updatedMessages
-          };
-          setCharacterHistories(updatedHistories);
-          saveToLocalStorage(updatedHistories);
-        }
-
-        setTimeout(() => {
-          setIsTyping(false);
-        }, data.content.length * 20 + 500);
-
-        if (data.content) {
-          setErrorMessage(null);
-        }
-
-        return; // 成功后退出
-      } catch (error) {
-        lastError = error;
-        console.error(`重试 ${retryCount + 1}/${MAX_RETRIES} 失败:`, error);
-        
-        if (error instanceof Error && error.name === 'AbortError') {
-          // 如果是超时错误，更新消息状态和错误提示
-          setMessages(prev => prev.map(msg => 
-            msg.timestamp === userMessage.timestamp 
-              ? { ...msg, status: 'error' as const } 
-              : msg
-          ));
-          setErrorMessage('请求超时，正在重试...');
-        }
-        
-        retryCount++;
-        
-        if (retryCount < MAX_RETRIES) {
-          // 等待一段时间后重试
-          await sleep(RETRY_DELAY * retryCount);
-        }
+        setCharacterHistories(updatedHistories);
+        saveToLocalStorage(updatedHistories);
       }
-    }
 
-    // 所有重试都失败后
-    console.error('所有重试都失败:', lastError);
-    setMessages(prev => prev.map(msg => 
-      msg.timestamp === userMessage.timestamp 
-        ? { ...msg, status: 'error' as const } 
-        : msg
-    ));
-    setErrorMessage('对话生成失败，请稍后重试');
-    setIsTyping(false);
+      setTimeout(() => {
+        setIsTyping(false);
+      }, data.content.length * 20 + 500);
+
+    } catch (error) {
+      console.error('调用 AI 接口出错：', error);
+      setMessages(prev => prev.map(msg => 
+        msg.timestamp === userMessage.timestamp 
+          ? { ...msg, status: 'error' as const } 
+          : msg
+      ));
+      setIsTyping(false);
+    }
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -1258,13 +1211,6 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
             {/* ... existing desktop poster gallery code ... */}
           </div>
         </>
-      )}
-
-      {/* 错误提示组件 */}
-      {errorMessage && (
-        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-red-500/80 text-white px-4 py-2 rounded-lg shadow-lg z-50">
-          <p className="text-sm">{errorMessage}</p>
-        </div>
       )}
     </div>
   );

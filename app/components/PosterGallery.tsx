@@ -1201,6 +1201,13 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
                     />
                   </div>
 
+                  {/* 在聊天窗口的输入框上方添加错误消息显示 */}
+                  {errorMessage && (
+                    <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 text-red-500 text-sm rounded-lg mx-3 mb-2">
+                      {errorMessage}
+                    </div>
+                  )}
+
                   {/* 输入框区域 */}
                   <div className="flex-none p-3 border-t border-white/10">
                     <form 

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import PosterGallery from './components/PosterGallery';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { loadGrayscaleImage } from './utils/imageProcessing';
 
 // 添加大图组件
@@ -31,7 +31,7 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
   }, []);
 
   // 预加载下一张图片
-  const preloadNextImage = (currentId: number) => {
+  const preloadNextImage = useCallback((currentId: number) => {
     const nextId = currentId % 6 + 1; // 假设有6张图片
     if (!imageCache[nextId]) {
       const img = new globalThis.Image();
@@ -71,7 +71,7 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
         console.error('预加载失败:', error);
       });
     }
-  };
+  }, [imageCache]);
   
   useEffect(() => {
     if (selectedId) {

@@ -13,11 +13,11 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
 
     try {
       await signIn(email, password);
@@ -34,6 +34,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           console.error('登录失败，请检查邮箱和密码是否正确');
         }
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 

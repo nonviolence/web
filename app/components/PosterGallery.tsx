@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
+import { useFirestore } from '../hooks/useFirestore';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -594,6 +596,7 @@ interface PosterGalleryProps {
 }
 
 export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
+  const { user, signOut } = useAuth();
   const [posters, setPosters] = useState<string[]>([]);
   const [selectedPoster, setSelectedPoster] = useState<PosterInfo | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -601,21 +604,22 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isTypingComplete, setIsTypingComplete] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<{ role: string; content: string; }[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const detailsRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastPosterId = useRef<number | null>(null);
-  const [conversationHistory, setConversationHistory] = useState<{ role: string; content: string; }[]>([]);
-  const [characterHistories, setCharacterHistories] = useState<Record<number, Message[]>>({});
-  const [isMobile, setIsMobile] = useState(false);
   const touchMoveHandler = useRef<((e: TouchEvent) => void) | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const { messages, loading, error, saveMessage } = useFirestore(selectedId);
 
-  // 简化滚动到底部函数
+  // 将 scrollToBottom 移到这里
   const scrollToBottom = useCallback(() => {
     setIsTypingComplete(true);
   }, []);
@@ -641,17 +645,6 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
     });
   }, []);
 
-  // 初始化时从 localStorage 加载历史记录
-  useEffect(() => {
-    const savedHistories = loadFromLocalStorage();
-    setCharacterHistories(savedHistories);
-  }, []);
-
-  // 当历史记录更新时保存到 localStorage
-  useEffect(() => {
-    saveToLocalStorage(characterHistories);
-  }, [characterHistories]);
-
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -662,46 +655,19 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => {
-    // 在effect内部保存ref的当前值
-    const currentContainer = containerRef.current;
-    const currentTouchHandler = touchMoveHandler.current;
-
-    // 组件卸载时清理事件监听器
-    return () => {
-      if (currentContainer && currentTouchHandler) {
-        currentContainer.removeEventListener('touchmove', currentTouchHandler);
-      }
-    };
-  }, []);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // 如果点击的是介绍页，不触发拖动
-    if (detailsRef.current?.contains(e.target as Node)) {
-      return;
-    }
-    setIsDragging(true);
-    setStartX(e.pageX - (containerRef.current?.offsetLeft || 0));
-    setScrollLeft(containerRef.current?.scrollLeft || 0);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    // 如果在介绍页上移动，不触发拖动
-    if (detailsRef.current?.contains(e.target as Node)) {
-      return;
-    }
-    if (!isDragging) return;
-    e.preventDefault();
-    const x = e.pageX - (containerRef.current?.offsetLeft || 0);
-    const walk = (x - startX) * 2;
-    if (containerRef.current) {
-      containerRef.current.scrollLeft = scrollLeft - walk;
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('退出失败:', error);
+      setErrorMessage('退出失败，请稍后重试');
     }
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  // 如果用户未登录，不显示任何内容
+  if (!user) {
+    return null;
+  }
 
   const handlePosterClick = (index: number) => {
     if (isDragging) return;
@@ -710,72 +676,94 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
     const newPoster = posterData[posterId];
     
     if (newPoster) {
-      // 检查是否点击了不同的角色
       if (selectedId !== posterId) {
-        // 保存当前角色的聊天记录
-        if (selectedId && messages.length > 0) {
-          const updatedHistories = {
-            ...characterHistories,
-            [selectedId]: [...messages]
-          };
-          setCharacterHistories(updatedHistories);
-          saveToLocalStorage(updatedHistories);
-        }
-        
-        // 重置输入状态
         setInputMessage('');
         setIsTyping(false);
         setIsTypingComplete(true);
         setConversationHistory([]);
-        
-        // 设置新角色并暂时隐藏详情弹窗
         setSelectedId(posterId);
-        setSelectedPoster(null); // 暂时隐藏详情弹窗
+        setSelectedPoster(null);
         
-        // 使用setTimeout确保动画效果平滑
         setTimeout(() => {
-          setSelectedPoster(newPoster); // 显示新的详情弹窗
+          setSelectedPoster(newPoster);
         }, 300);
         
-        // 加载新角色的聊天记录
-        const characterHistory = characterHistories[posterId] || [];
-        setMessages(characterHistory);
-
-        // 触发选择回调
         onSelectPoster?.(posterId);
       } else {
-        // 如果点击相同的海报，切换详情弹窗的显示状态
         setSelectedPoster(selectedPoster === null ? newPoster : null);
       }
       lastPosterId.current = posterId;
     }
   };
 
-  const handlePosterHover = (index: number) => {
-    if (isDragging) return;
+  const handleSendMessage = async () => {
+    const trimmedMessage = inputMessage.trim();
+    const currentPoster = selectedId ? posterData[selectedId] : null;
     
-    // 清除之前的定时器
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
+    if (!trimmedMessage || !currentPoster || isTyping || !user) {
+      return;
     }
 
-    // 设置新的定时器，300ms 后显示介绍页
-    hoverTimeoutRef.current = setTimeout(() => {
-      const src = posters[index];
-      const posterId = parseInt(src.match(/poster_(\d+)/)?.[1] || '0');
-      const newPoster = posterData[posterId];
-      
-      if (newPoster) {
-        setSelectedPoster(newPoster);
-        // 不在hover时更新selectedId，保持当前聊天对象不变
-        lastPosterId.current = posterId;
-      }
-    }, 300);
-  };
+    setInputMessage('');
+    setIsTyping(true);
+    setIsTypingComplete(false);
+    setErrorMessage(null);
 
-  const handlePosterHoverEnd = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
+    try {
+      // 保存用户消息到 Firestore
+      await saveMessage({
+        role: 'user',
+        content: trimmedMessage,
+        status: 'sending'
+      });
+
+      const newHistory = [
+        { role: 'system', content: generateSystemPrompt(currentPoster) },
+        ...conversationHistory,
+        { role: 'user', content: trimmedMessage }
+      ];
+
+      const data = await fetchWithRetry('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: newHistory }),
+      });
+
+      setConversationHistory([
+        ...newHistory,
+        { role: 'assistant', content: data.content }
+      ]);
+
+      // 保存助手回复到 Firestore
+      await saveMessage({
+        role: 'assistant',
+        content: data.content,
+        status: 'sent',
+        isRead: false
+      });
+
+      setTimeout(() => {
+        setIsTyping(false);
+      }, data.content.length * 20 + 500);
+
+    } catch (error) {
+      console.error('发送消息失败:', error);
+      
+      let errorMsg = '发送失败，请稍后重试';
+      if (error instanceof Error) {
+        if (error.message.includes('timeout') || error.message.includes('504')) {
+          errorMsg = '请求超时，请稍后重试';
+        } else if (error.message.includes('429')) {
+          errorMsg = '请求过于频繁，请稍后再试';
+        } else if (error.message.includes('401')) {
+          errorMsg = 'API认证失败，请联系管理员';
+        }
+      }
+      
+      setErrorMessage(errorMsg);
+      setIsTyping(false);
     }
   };
 
@@ -872,102 +860,54 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
     throw lastError;
   }
 
-  const handleSendMessage = async () => {
-    const trimmedMessage = inputMessage.trim();
-    const currentPoster = selectedId ? posterData[selectedId] : null;
-    
-    if (!trimmedMessage || !currentPoster || isTyping) {
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (detailsRef.current?.contains(e.target as Node)) {
       return;
     }
+    setIsDragging(true);
+    setStartX(e.pageX - (containerRef.current?.offsetLeft || 0));
+    setScrollLeft(containerRef.current?.scrollLeft || 0);
+  };
 
-    setInputMessage('');
-    setIsTyping(true);
-    setIsTypingComplete(false);
-    setErrorMessage(null);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (detailsRef.current?.contains(e.target as Node)) {
+      return;
+    }
+    if (!isDragging) return;
+    e.preventDefault();
+    const x = e.pageX - (containerRef.current?.offsetLeft || 0);
+    const walk = (x - startX) * 2;
+    if (containerRef.current) {
+      containerRef.current.scrollLeft = scrollLeft - walk;
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handlePosterHover = (index: number) => {
+    if (isDragging) return;
     
-    const userMessage: Message = {
-      role: 'user',
-      content: trimmedMessage,
-      timestamp: Date.now(),
-      status: 'sending'
-    };
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
 
-    setMessages(prev => [...prev, userMessage]);
-
-    try {
-      const newHistory = [
-        { role: 'system', content: generateSystemPrompt(currentPoster) },
-        ...conversationHistory,
-        { role: 'user', content: trimmedMessage }
-      ];
-
-      const data = await fetchWithRetry('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: newHistory }),
-      });
-
-      setConversationHistory([
-        ...newHistory,
-        { role: 'assistant', content: data.content }
-      ]);
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: data.content,
-        timestamp: Date.now(),
-        status: 'sent',
-        isRead: false
-      };
-
-      const updatedMessages = [
-        ...messages,
-        {
-          ...userMessage,
-          status: 'sent' as const
-        },
-        assistantMessage
-      ];
-
-      setMessages(updatedMessages);
-
-      if (selectedId) {
-        const updatedHistories = {
-          ...characterHistories,
-          [selectedId]: updatedMessages
-        };
-        setCharacterHistories(updatedHistories);
-        saveToLocalStorage(updatedHistories);
-      }
-
-      setTimeout(() => {
-        setIsTyping(false);
-      }, data.content.length * 20 + 500);
-
-    } catch (error) {
-      console.error('发送消息失败:', error);
+    hoverTimeoutRef.current = setTimeout(() => {
+      const src = posters[index];
+      const posterId = parseInt(src.match(/poster_(\d+)/)?.[1] || '0');
+      const newPoster = posterData[posterId];
       
-      setMessages(prev => prev.map(msg => 
-        msg.timestamp === userMessage.timestamp 
-          ? { ...msg, status: 'error' as const } 
-          : msg
-      ));
-
-      let errorMsg = '发送失败，请稍后重试';
-      if (error instanceof Error) {
-        if (error.message.includes('timeout') || error.message.includes('504')) {
-          errorMsg = '请求超时，请稍后重试';
-        } else if (error.message.includes('429')) {
-          errorMsg = '请求过于频繁，请稍后再试';
-        } else if (error.message.includes('401')) {
-          errorMsg = 'API认证失败，请联系管理员';
-        }
+      if (newPoster) {
+        setSelectedPoster(newPoster);
+        lastPosterId.current = posterId;
       }
-      
-      setErrorMessage(errorMsg);
-      setIsTyping(false);
+    }, 300);
+  };
+
+  const handlePosterHoverEnd = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
     }
   };
 
@@ -975,9 +915,8 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
     setIsDragging(true);
     setStartX(e.touches[0].pageX);
     setScrollLeft(containerRef.current?.scrollLeft || 0);
-    setErrorMessage(null); // 清除任何现有的错误消息
+    setErrorMessage(null);
 
-    // 创建并存储 touchmove 处理函数
     const touchMoveListener = (e: TouchEvent) => {
       if (!isDragging) return;
       e.preventDefault();
@@ -988,10 +927,8 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
       }
     };
 
-    // 保存引用以便后续移除
     touchMoveHandler.current = touchMoveListener;
 
-    // 添加事件监听器，设置 passive: false
     if (containerRef.current) {
       containerRef.current.addEventListener('touchmove', touchMoveListener, { passive: false });
     }
@@ -999,7 +936,6 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
 
   const handleTouchEnd = () => {
     setIsDragging(false);
-    // 移除事件监听器
     if (containerRef.current && touchMoveHandler.current) {
       containerRef.current.removeEventListener('touchmove', touchMoveHandler.current);
       touchMoveHandler.current = null;
@@ -1017,15 +953,12 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
               <Image
                 src="/images/chat_bg.png"
                 alt="Background"
-                className="object-contain opacity-5"
+                className="object-cover md:object-contain opacity-5"
                 sizes="100vw"
-                width={1920}
-                height={1080}
+                fill
                 priority
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  margin: 'auto'
+                  objectPosition: 'center'
                 }}
               />
             </div>
@@ -1038,15 +971,12 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
               <Image
                 src="/images/chat_bg.png"
                 alt="Foreground"
-                className="object-contain opacity-10"
+                className="object-cover md:object-contain opacity-10"
                 sizes="100vw"
-                width={1920}
-                height={1080}
+                fill
                 priority
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  margin: 'auto'
+                  objectPosition: 'center'
                 }}
               />
             </div>
@@ -1054,17 +984,32 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
         </div>
       </div>
 
+      {/* 添加错误提示 */}
+      {error && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-500 px-4 py-2 rounded-lg shadow-lg">
+            {error}
+          </div>
+        </div>
+      )}
+
       {/* 移动端四行布局 */}
       {isMobile ? (
         <div className="fixed inset-0 z-10 flex flex-col h-screen">
-          {/* 第一行：Logo (1/10的高度) */}
-          <div className="h-[10vh] bg-black/40 backdrop-blur-sm flex items-center justify-center relative">
+          {/* 第一行：Logo (8%的高度) */}
+          <div className="h-[8vh] bg-black/40 backdrop-blur-sm flex items-center justify-between relative px-4">
             <div className="absolute inset-0 bg-black/40" />
             <h1 className="text-2xl font-bold text-primary relative z-10">罗德岛终端</h1>
+            <button
+              onClick={handleSignOut}
+              className="relative z-10 px-3 py-1 bg-primary/20 text-primary rounded-lg text-sm hover:bg-primary/30 transition-colors"
+            >
+              退出登录
+            </button>
           </div>
 
-          {/* 第二行：海报列表 (2/10的高度) */}
-          <div className="h-[20vh] bg-black/40 backdrop-blur-sm">
+          {/* 第二行：海报列表 (15%的高度) */}
+          <div className="h-[15vh] bg-black/40 backdrop-blur-sm">
             <div className="h-full px-2 py-1">
               <div 
                 ref={containerRef}
@@ -1114,9 +1059,9 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
             </div>
           </div>
 
-          {/* 第三行：详情弹窗 (1.5/10的高度) */}
-          <div className="h-[15vh] bg-black/30 backdrop-blur-sm overflow-hidden">
-            <AnimatePresence mode="wait">
+          {/* 第三行：详情弹窗 (22%的高度) */}
+          <div className="h-[22vh] bg-black/30 backdrop-blur-sm overflow-hidden">
+            <AnimatePresence>
               {selectedPoster && (
                 <motion.div
                   ref={detailsRef}
@@ -1124,6 +1069,26 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   className="h-full w-full overflow-y-auto custom-scrollbar"
+                  onWheel={(e) => {
+                    const element = e.currentTarget;
+                    if (element.scrollHeight > element.clientHeight) {
+                      e.stopPropagation();
+                    } else {
+                      e.preventDefault();
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    const element = e.currentTarget;
+                    if (element.scrollHeight > element.clientHeight) {
+                      e.stopPropagation();
+                    }
+                  }}
+                  onTouchMove={(e) => {
+                    const element = e.currentTarget;
+                    if (element.scrollHeight > element.clientHeight) {
+                      e.stopPropagation();
+                    }
+                  }}
                 >
                   <div className="p-3 space-y-2">
                     <div>
@@ -1250,8 +1215,18 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
           </div>
         </div>
       ) : (
-        // 桌面端布局保持不变
+        // 桌面端布局
         <>
+          {/* 添加退出按钮到桌面端布局 */}
+          <div className="fixed top-4 right-4 z-30">
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 bg-primary/20 text-primary rounded-lg text-sm hover:bg-primary/30 transition-colors"
+            >
+              退出登录
+            </button>
+          </div>
+
           {/* 聊天界面 */}
           <div className="fixed top-0 right-0 h-screen w-[400px] bg-black/40 backdrop-blur-md border-l border-white/10 z-20">
             {/* ... existing desktop chat interface code ... */}

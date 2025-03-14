@@ -9,9 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@firebase/firestore": "^4.7.9",
     "@heroicons/react": "^2.2.0",
     "@react-three/drei": "^10.0.4",
     "@react-three/fiber": "^9.1.0",
+    "firebase": "^11.4.0",
     "framer-motion": "^12.4.10",
     "next": "15.2.1",
     "openai": "^4.86.2",

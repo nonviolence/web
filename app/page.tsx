@@ -6,6 +6,9 @@ import PosterGallery from './components/PosterGallery';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
 import { loadGrayscaleImage } from './utils/imageProcessing';
+import LoginModal from './components/LoginModal';
+import UserAvatar from './components/UserAvatar';
+import { useAuth } from './contexts/AuthContext';
 
 // 添加大图组件
 const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
@@ -251,6 +254,15 @@ const PosterBigDisplay = ({ selectedId }: { selectedId: number | null }) => {
 export default function Home() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const { user } = useAuth();
+
+  // 添加自动显示登录模态框的逻辑
+  useEffect(() => {
+    if (!user) {
+      setShowLoginModal(true);
+    }
+  }, [user]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -281,6 +293,9 @@ export default function Home() {
             Rhodes Island
           </span>
         </Link>
+
+        {/* 用户头像/登录按钮 */}
+        <UserAvatar onLoginClick={() => setShowLoginModal(true)} />
       </nav>
 
       {/* 主要内容 */}
@@ -290,6 +305,12 @@ export default function Home() {
 
       {/* 大图展示 */}
       <PosterBigDisplay selectedId={selectedId} />
+
+      {/* 登录模态框 */}
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+      />
     </main>
   );
 }

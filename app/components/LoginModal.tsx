@@ -10,21 +10,17 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
+  const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const { signIn, signInWithGoogle, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      if (isRegistering) {
-        await signUp(email, password);
-      } else {
-        await signIn(email, password);
-      }
+      await signIn(email, password);
       onClose();
     } catch (error) {
       if (error instanceof Error) {
@@ -35,7 +31,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         } else if (error.message.includes('auth/weak-password')) {
           console.error('密码强度不够，请使用至少6位字符');
         } else {
-          console.error(isRegistering ? '注册失败，请稍后重试' : '登录失败，请检查邮箱和密码是否正确');
+          console.error('登录失败，请检查邮箱和密码是否正确');
         }
       }
     }
@@ -100,7 +96,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3 py-2 bg-black/20 border border-primary/20 rounded-lg focus:outline-none focus:border-primary/40 text-white"
-                  placeholder={isRegistering ? "请设置密码（至少6位）" : "请输入密码"}
+                  placeholder="请输入密码"
                   required
                 />
               </div>
@@ -110,20 +106,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 disabled={isLoading}
                 className="w-full py-2 px-4 bg-primary/20 hover:bg-primary/30 text-primary font-medium rounded-lg transition-colors disabled:opacity-50"
               >
-                {isLoading ? (isRegistering ? '注册中...' : '登录中...') : (isRegistering ? '注册' : '登录')}
+                {isLoading ? '登录中...' : '登录'}
               </button>
-
-              <div className="flex justify-center text-sm">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsRegistering(!isRegistering);
-                  }}
-                  className="text-primary/70 hover:text-primary transition-colors"
-                >
-                  {isRegistering ? '已有账号？点击登录' : '没有账号？点击注册'}
-                </button>
-              </div>
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">

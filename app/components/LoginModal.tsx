@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
-import Image from 'next/image';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -13,15 +12,12 @@ interface LoginModalProps {
 export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const { signIn, signInWithGoogle, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
 
     try {
       if (isRegistering) {
@@ -33,29 +29,24 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('auth/email-already-in-use')) {
-          setError('该邮箱已被注册');
+          console.error('该邮箱已被注册');
         } else if (error.message.includes('auth/invalid-credential')) {
-          setError('邮箱或密码错误');
+          console.error('邮箱或密码错误');
         } else if (error.message.includes('auth/weak-password')) {
-          setError('密码强度不够，请使用至少6位字符');
+          console.error('密码强度不够，请使用至少6位字符');
         } else {
-          setError(isRegistering ? '注册失败，请稍后重试' : '登录失败，请检查邮箱和密码是否正确');
+          console.error(isRegistering ? '注册失败，请稍后重试' : '登录失败，请检查邮箱和密码是否正确');
         }
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    setError('');
     setIsLoading(true);
-
     try {
       await signInWithGoogle();
-      onClose();
-    } catch (error) {
-      setError('Google 登录失败，请稍后重试');
+    } catch (err) {
+      console.error('登录失败:', err);
     } finally {
       setIsLoading(false);
     }
@@ -114,12 +105,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 />
               </div>
 
-              {error && (
-                <div className="text-red-500 text-sm">
-                  {error}
-                </div>
-              )}
-
               <button
                 type="submit"
                 disabled={isLoading}
@@ -133,7 +118,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   type="button"
                   onClick={() => {
                     setIsRegistering(!isRegistering);
-                    setError('');
                   }}
                   className="text-primary/70 hover:text-primary transition-colors"
                 >

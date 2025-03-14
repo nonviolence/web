@@ -1,22 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
   addDoc,
-  getDocs,
+  serverTimestamp,
+  where,
+  limit,
+  Timestamp,
   doc,
   setDoc,
-  onSnapshot,
-  Timestamp,
-  QuerySnapshot,
-  DocumentData,
-  QueryDocumentSnapshot,
-  serverTimestamp,
-  limit
 } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,7 +40,6 @@ export function useFirestore(characterId: number | null) {
 
     const chatsRef = collection(db, 'chats');
     
-    // 尝试使用简化的查询，直到索引准备就绪
     const q = query(
       chatsRef,
       where('userId', '==', user.uid),
@@ -61,12 +56,10 @@ export function useFirestore(characterId: number | null) {
               const data = doc.data();
               return {
                 ...data,
-                timestamp: data.timestamp instanceof Timestamp 
-                  ? data.timestamp.toMillis() 
-                  : data.timestamp,
+                timestamp: data.timestamp?.toMillis?.() || data.timestamp || Date.now(),
               } as Message;
             })
-            .sort((a, b) => a.timestamp - b.timestamp); // 在内存中排序
+            .sort((a, b) => a.timestamp - b.timestamp);
 
           setMessages(newMessages);
           setLoading(false);

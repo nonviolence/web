@@ -382,29 +382,6 @@ const CharacterAvatar: React.FC<{ posterId: number; className?: string }> = ({ p
   );
 };
 
-// 添加本地存储相关的常量和工具函数
-const STORAGE_KEY = 'rhodesAI_chatHistories';
-
-// 用于保存聊天记录到 localStorage
-const saveToLocalStorage = (histories: Record<number, Message[]>) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(histories));
-  } catch (error) {
-    console.error('保存聊天记录失败:', error);
-  }
-};
-
-// 从 localStorage 加载聊天记录
-const loadFromLocalStorage = (): Record<number, Message[]> => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : {};
-  } catch (error) {
-    console.error('加载聊天记录失败:', error);
-    return {};
-  }
-};
-
 // 在 TypewriterText 组件之前添加
 interface ChatHistoryProps {
   messages: Message[];
@@ -617,7 +594,7 @@ export default function PosterGallery({ onSelectPoster }: PosterGalleryProps) {
   const lastPosterId = useRef<number | null>(null);
   const touchMoveHandler = useRef<((e: TouchEvent) => void) | null>(null);
   
-  const { messages, loading, error, saveMessage } = useFirestore(selectedId);
+  const { messages, error, saveMessage } = useFirestore(selectedId);
 
   // 将 scrollToBottom 移到这里
   const scrollToBottom = useCallback(() => {
@@ -949,36 +926,44 @@ ${Object.entries(character.relationships).map(([name, relation]) => `   - 与${n
         {/* 后景层 */}
         <div className="absolute inset-0">
           <div className="relative w-full h-full">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Image
-                src="/images/chat_bg.png"
-                alt="Background"
-                className="object-cover md:object-contain opacity-5"
-                sizes="100vw"
-                fill
-                priority
-                style={{
-                  objectPosition: 'center'
-                }}
-              />
+            <div className="absolute inset-0 flex items-end justify-end">
+              <div className="relative w-full h-full max-w-screen-xl mx-auto">
+                <Image
+                  src="/images/chat_bg.png"
+                  alt="Background"
+                  className="object-cover md:object-contain opacity-5"
+                  sizes="100vw"
+                  fill
+                  priority
+                  style={{
+                    objectPosition: 'right bottom',
+                    transform: 'translateX(300px)',
+                    maxWidth: '100vw'
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
         {/* 前景层 */}
         <div className="absolute inset-0">
           <div className="relative w-full h-full">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Image
-                src="/images/chat_bg.png"
-                alt="Foreground"
-                className="object-cover md:object-contain opacity-10"
-                sizes="100vw"
-                fill
-                priority
-                style={{
-                  objectPosition: 'center'
-                }}
-              />
+            <div className="absolute inset-0 flex items-end justify-end">
+              <div className="relative w-full h-full max-w-screen-xl mx-auto">
+                <Image
+                  src="/images/chat_bg.png"
+                  alt="Foreground"
+                  className="object-cover md:object-contain opacity-10"
+                  sizes="100vw"
+                  fill
+                  priority
+                  style={{
+                    objectPosition: 'right bottom',
+                    transform: 'translateX(300px)',
+                    maxWidth: '100vw'
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>

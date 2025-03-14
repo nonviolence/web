@@ -15,7 +15,7 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// 初始化 Firebase
+// 初始化 Firebase 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 // 获取 Auth 实例并配置
